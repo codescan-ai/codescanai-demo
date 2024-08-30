@@ -1,0 +1,89 @@
+name: An example CI workflow to use codescanai-action
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+      # Use the codescanai-action to generate a  CodeScanAI report.
+      - name: Run CodeScanAI Action
+        id: codescan-ai
+        uses: codescan-ai/codescanai-action@v1.0.1
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          provider: "openai"
+          changes_only: true
+          pr_number: ${{ github.event.pull_request.number }}
+          repo: ${{ github.repository }}
+          output_file: "codescanai_report.txt"
+
+      - name: Check CodeScanAI report exist
+        shell: bash
+        run: |
+          codescanai_report_file="codescanai_report.txt"
+
+          # Check if the output file exists and is not empty
+          if [[ ! -s "$codescanai_report_file" ]]; then
+            echo "No output detected from CodeScanAI action."
+            exit 1
+          fi
+
+          echo "CodeScanAI action produced output successfully."
+
+      - name: Comment CodeScanAI Output to PR
+        uses: actions/github-script@v7
+        if: ${{ github.event_name == 'pull_request' }}
+        with:
+          script: |
+            const fs = require('fs');
+
+            const output = fs.readFileSync('codescanai_report.txt', 'utf8');
+
+            const pullRequests = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${context.ref.replace('refs/heads/', '')}`
+            })
+
+            const issueNumber = context.issue.number || pullRequests.data[0].number
+
+            const {data: comments} = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+            })
+            const botComment = comments.find(comment => {
+                return comment.user.type === 'Bot' && comment.body.includes('CodeScanAI Report')
+            })
+
+            const commentBody = `## CodeScanAI Report\n\n<details><summary>View Results</summary>\n\n${output}\n\n</details>`;
+
+            // If we have a comment, update it, otherwise create a new one
+            if (botComment) {
+                await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: botComment.id,
+                    body: commentBody
+                })
+            } else {
+                await github.rest.issues.createComment({
+                    issue_number: issueNumber,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    body: commentBody
+                })
+            }
