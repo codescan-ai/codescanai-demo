@@ -27,6 +27,7 @@ jobs:
           changes_only: true
           pr_number: ${{ github.event.pull_request.number }}
           repo: ${{ github.repository }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           output_file: "codescanai_report.txt"
 
       - name: Check CodeScanAI report exist
