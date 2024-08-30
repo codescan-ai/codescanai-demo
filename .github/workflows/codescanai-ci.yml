@@ -80,6 +80,7 @@ jobs:
                     comment_id: botComment.id,
                     body: commentBody
                 })
+                console.log('Updating existing bot comment!');
             } else {
                 await github.rest.issues.createComment({
                     issue_number: issueNumber,
@@ -87,4 +88,5 @@ jobs:
                     repo: context.repo.repo,
                     body: commentBody
                 })
+                console.log('Creating a new bot comment!');
             }
